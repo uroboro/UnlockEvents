@@ -1,0 +1,9 @@
+Package: com.uroboro.unlockevents
+Name: UnlockEvents
+Depends: mobilesubstrate, libactivator
+Version: 0.0.1
+Architecture: iphoneos-arm
+Description: Unlock events for Activator
+Maintainer: uroboro <uroboro.845@gmail.com>
+Author: uroboro <uroboro.845@gmail.com>
+Section: Addons (Activator)
