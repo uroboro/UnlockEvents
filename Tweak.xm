@@ -1,55 +1,16 @@
 #include <libactivator/libactivator.h>
 
-//from https://github.com/rpetrich/libactivator/blob/master/libactivator-private.h#L168
-__attribute__((always_inline))
+//based on http://iphonedevwiki.net/index.php/Libactivator#Dispatching_Events
 static inline LAEvent *LASendEventWithName(NSString *eventName) {
-	LAEvent *event = [[[LAEvent alloc] initWithName:eventName mode:[LASharedActivator currentEventMode]] autorelease];
+	LAEvent *event = [LAEvent eventWithName:eventName mode:[LASharedActivator currentEventMode]];
 	[LASharedActivator sendEventToListener:event];
 	return event;
 }
-//to https://github.com/rpetrich/libactivator/blob/master/libactivator-private.h#L174
 
-static const NSString *UEDeviceUnlockCanceled = @"sbdeviceunlock.canceled";
-static const NSString *UEDeviceUnlockFailed = @"sbdeviceunlock.failed";
-static const NSString *UEDeviceUnlockSucceeded = @"sbdeviceunlock.succeeded";
+static NSString *UEDeviceUnlockCanceled = @"com.uroboro.unlockevents.sbdeviceunlock.canceled";
+static NSString *UEDeviceUnlockFailed = @"com.uroboro.unlockevents.sbdeviceunlock.failed";
+static NSString *UEDeviceUnlockSucceeded = @"com.uroboro.unlockevents.sbdeviceunlock.succeeded";
 
-@interface SBSlidingAlertDisplay
-
-- (void)deviceUnlockCanceled;
-- (void)deviceUnlockFailed;
-
-@end
-
-%hook SBSlidingAlertDisplay
-
-- (void)deviceUnlockCanceled {
-	LASendEventWithName(UEDeviceUnlockCanceled);
-	%orig;
-}
-
-- (void)deviceUnlockFailed {
-	LASendEventWithName(UEDeviceUnlockFailed);
-	%orig;
-}
-
-%end
-
-@interface SBIconController
-
-- (void)_awayControllerUnlocked:(id)unlocked;
-
-@end
-
-%hook SBIconController
-
-- (void)_awayControllerUnlocked:(id)unlocked {
-	LASendEventWithName(UEDeviceUnlockSucceeded);
-	%orig;
-}
-
-%end
-
-////////////////////////////////////////////////////////////////
 enum {
 	eLAEventModeSpringBoard,
 	eLAEventModeApplication,
@@ -95,15 +56,21 @@ static inline unsigned char SADEventName(NSString *eventName) {
 @implementation SADUnlockDataSource
 
 + (id)sharedInstance {
-	static SADUnlockDataSource *shared = nil;
-	if (!shared) {
-		shared = [[SADUnlockDataSource alloc] init];
-	}
-	return shared;
+	static id sharedInstance = nil;
+	static dispatch_once_t token = 0;
+	dispatch_once(&token, ^{
+		sharedInstance = [self new];
+	});
+	return sharedInstance;
+}
+
++ (void)load {
+	[self sharedInstance];
 }
 
 - (id)init {
 	if ((self = [super init])) {
+		// Register our events
 		[LASharedActivator registerEventDataSource:self forEventName:UEDeviceUnlockCanceled];
 		[LASharedActivator registerEventDataSource:self forEventName:UEDeviceUnlockFailed];
 		[LASharedActivator registerEventDataSource:self forEventName:UEDeviceUnlockSucceeded];
@@ -112,11 +79,10 @@ static inline unsigned char SADEventName(NSString *eventName) {
 }
 
 - (void)dealloc {
-	if (LASharedActivator.runningInsideSpringBoard) {
-		[LASharedActivator unregisterEventDataSourceWithEventName:UEDeviceUnlockCanceled];
-		[LASharedActivator unregisterEventDataSourceWithEventName:UEDeviceUnlockFailed];
-		[LASharedActivator unregisterEventDataSourceWithEventName:UEDeviceUnlockSucceeded];
-	}
+	[LASharedActivator unregisterEventDataSourceWithEventName:UEDeviceUnlockCanceled];
+	[LASharedActivator unregisterEventDataSourceWithEventName:UEDeviceUnlockFailed];
+	[LASharedActivator unregisterEventDataSourceWithEventName:UEDeviceUnlockSucceeded];
+
 	[super dealloc];
 }
 
@@ -158,7 +124,42 @@ static inline unsigned char SADEventName(NSString *eventName) {
 
 @end
 
-%ctor {
-	%init;
-	[SADUnlockDataSource sharedInstance];
+////////////////////////////////////////////////////////////////
+
+// Event dispatch
+
+@interface SBSlidingAlertDisplay
+
+- (void)deviceUnlockCanceled;
+- (void)deviceUnlockFailed;
+
+@end
+
+%hook SBSlidingAlertDisplay
+
+- (void)deviceUnlockCanceled {
+	LASendEventWithName(UEDeviceUnlockCanceled);
+	%orig;
 }
+
+- (void)deviceUnlockFailed {
+	LASendEventWithName(UEDeviceUnlockFailed);
+	%orig;
+}
+
+%end
+
+@interface SBIconController
+
+- (void)_awayControllerUnlocked:(id)unlocked;
+
+@end
+
+%hook SBIconController
+
+- (void)_awayControllerUnlocked:(id)unlocked {
+	LASendEventWithName(UEDeviceUnlockSucceeded);
+	%orig;
+}
+
+%end
