@@ -128,6 +128,8 @@ static inline unsigned char SADEventName(NSString *eventName) {
 
 // Event dispatch
 
+%group UE_IOS6
+
 @interface SBSlidingAlertDisplay
 
 - (void)deviceUnlockCanceled;
@@ -163,3 +165,65 @@ static inline unsigned char SADEventName(NSString *eventName) {
 }
 
 %end
+
+%end // group UE_IOS6
+
+%group UE_IOS8
+
+@interface SBUIPasscodeLockViewBase
+
+- (void)resetForFailedPasscode;
+
+@end
+
+%hook SBUIPasscodeLockViewBase
+
+- (void)resetForFailedPasscode {
+    LASendEventWithName(UEDeviceUnlockFailed);
+    %orig;
+}
+
+%end
+
+@interface SBUIPasscodeLockViewWithKeypad
+
+- (void)_notifyDelegatePasscodeCancelled;
+
+@end
+
+%hook SBUIPasscodeLockViewWithKeypad
+
+- (void)_notifyDelegatePasscodeCancelled {
+    LASendEventWithName(UEDeviceUnlockCanceled);
+    %orig;
+}
+
+%end
+
+@interface SBUIPasscodeLockViewWithKeyboard
+
+- (void)_notifyDelegatePassCodeCancelled;
+
+@end
+
+%hook SBUIPasscodeLockViewWithKeyboard
+
+- (void)_notifyDelegatePasscodeCancelled {
+    LASendEventWithName(UEDeviceUnlockCanceled);
+    %orig;
+}
+
+%end
+
+%end // group UE_IOS8
+
+%ctor {
+	if (kCFCoreFoundationVersionNumber < 800) { // < iOS 7
+		%init(UE_IOS6);
+//	} else if (kCFCoreFoundationVersionNumber < 1000) { // iOS 7
+//		%init(UE_IOS7);
+	} else { // iOS 8
+		%init(UE_IOS8);
+	}
+	
+}
